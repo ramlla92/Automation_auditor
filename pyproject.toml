@@ -1,0 +1,24 @@
+[project]
+name = "automaton-auditor"
+version = "0.1.0"
+description = "Automaton Auditor – Digital Courtroom"
+readme = "README.md"
+authors = [
+    { name = "remu", email = "akmelremu@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "langchain-google-genai>=4.2.1",
+    "langgraph>=1.0.9",
+    "langsmith>=0.7.6",
+    "pydantic>=2.12.5",
+    "python-dotenv>=1.2.1",
+]
+
+[tool.uv]
+package = false
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
