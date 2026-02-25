@@ -44,12 +44,15 @@ def test_judicial_opinion_invalid_score():
 
 
 def test_agent_state_initial_state():
-    """Test initial AgentState."""
-    state = AgentState(
-        github_urls=["https://github.com/user/repo"],
-        pdf_path=None,
-    )
-    assert state.github_urls == ["https://github.com/user/repo"]
-    assert state.evidences == {}
-    assert state.opinions == {}
-    assert state.error is None
+    """Test initial AgentState as a TypedDict."""
+    state: AgentState = {
+        "github_urls": ["https://github.com/user/repo"],
+        "pdf_path": None,
+        "evidences": {},
+        "opinions": [],
+        "error": None
+    }
+    assert state["github_urls"] == ["https://github.com/user/repo"]
+    assert state["evidences"] == {}
+    assert state["opinions"] == []
+    assert state["error"] is None
