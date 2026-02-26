@@ -2,6 +2,7 @@
 import os
 import subprocess
 import tempfile
+import ast
 from pathlib import Path
 from typing import List, Dict, Optional
 
@@ -112,4 +113,102 @@ def analyze_code_structure(repo_path: str) -> Dict[str, bool]:
         "state_py": (path_root / "src/state.py").is_file(),
         "nodes_dir": (path_root / "src/nodes").is_dir(),
         "tools_dir": (path_root / "src/tools").is_dir()
+    }
+
+def ast_analyze_source(file_path: str) -> Dict[str, any]:
+    """
+    Uses AST to inspect Python code for state structure and graph patterns.
+    """
+    if not os.path.exists(file_path):
+        return {"error": "File not found"}
+        
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read())
+            
+        findings = {
+            "has_typed_dict": False,
+            "has_pydantic_model": False,
+            "has_parallel_edges": False
+        }
+        
+        edges = {}
+        for node in ast.walk(tree):
+            # Check for inheritance (TypedDict or BaseModel)
+            if isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    if isinstance(base, ast.Name):
+                        if base.id == "TypedDict":
+                            findings["has_typed_dict"] = True
+                        if base.id == "BaseModel":
+                            findings["has_pydantic_model"] = True
+                    elif isinstance(base, ast.Attribute):
+                        if base.attr == "TypedDict":
+                            findings["has_typed_dict"] = True
+                        if base.attr == "BaseModel":
+                            findings["has_pydantic_model"] = True
+                            
+            # Check for parallel fan-out patterns
+            if isinstance(node, ast.Call):
+                if hasattr(node.func, "attr") and node.func.attr == "add_edge":
+                    if len(node.args) >= 2:
+                        arg1, arg2 = node.args[0], node.args[1]
+                        if isinstance(arg1, ast.Constant) and isinstance(arg2, ast.Constant):
+                            if isinstance(arg1.value, str) and isinstance(arg2.value, str):
+                                from_node = arg1.value
+                                to_node = arg2.value
+                                if from_node not in edges:
+                                    edges[from_node] = set()
+                                edges[from_node].add(to_node)
+                                
+        for from_node, to_nodes in edges.items():
+            if len(to_nodes) > 1:
+                findings["has_parallel_edges"] = True
+                break
+                
+        return findings
+    except Exception as e:
+        return {"error": str(e)}
+
+def classify_git_narrative(history: List[Dict[str, str]]) -> Dict[str, any]:
+    """
+    Analyzes commit history to classify the development narrative.
+    """
+    if not history:
+        return {"classification": "unknown", "reason": "No history provided", "commit_count": 0, "has_meaningful_messages": False}
+        
+    commit_count = len(history)
+    messages = [h["message"].lower() for h in history]
+    meaningful_count = len([m for m in messages if len(m) > 10])
+    has_meaningful_messages = meaningful_count > (commit_count / 2)
+    
+    classification = "monolithic"
+    if commit_count > 2:
+        meaningful_prefixes = ["feat", "fix", "refactor", "docs", "chore"]
+        prefix_matches = 0
+        for msg in messages:
+            for prefix in meaningful_prefixes:
+                if msg.startswith(prefix):
+                    prefix_matches += 1
+                    break
+                    
+        # If at least 2 messages use standard prefixes, consider it atomic
+        if prefix_matches >= 2:
+            classification = "atomic"
+            
+    return {
+        "commit_count": commit_count,
+        "classification": classification,
+        "has_meaningful_messages": has_meaningful_messages
+    }
+
+def analyze_graph_structure(path: str) -> Dict[str, bool]:
+    """
+    High-level AST check for StateGraph usage and parallel fan-out.
+    """
+    info = ast_analyze_source(path)
+    return {
+        "parsed_ok": "error" not in info,
+        "has_typed_state": info.get("has_typed_dict", False) or info.get("has_pydantic_model", False),
+        "has_parallel_edges": info.get("has_parallel_edges", False),
     }
