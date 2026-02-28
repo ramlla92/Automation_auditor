@@ -12,6 +12,8 @@ from ..tools.repo_tools import (
     ast_analyze_source,
     classify_git_narrative,
     analyze_graph_structure,
+    analyze_tool_security,
+    analyze_structured_output,
     RepoCloneError, 
     GitHistoryError
 )
@@ -143,6 +145,30 @@ def repo_investigator_node(state: AgentState) -> AgentState:
             location="git:log",
             rationale="Applied semantic checks on git messages and overall commit count.",
             confidence=0.9
+        ))
+        
+        # Protocol D: Safe Tool Engineering (Maps to dimension: safe_tool_engineering)
+        security_findings = analyze_tool_security(repo_path)
+        sec_msg = f"Tools secure: tempfile={security_findings['has_tempfile']}, subprocess={security_findings['has_subprocess']}, no_os_system={not security_findings['has_os_system']}."
+        _append_evidence(new_evidences, "safe_tool_engineering", Evidence(
+            goal="Verify safe tool execution practices in src/tools/",
+            found=security_findings['has_tempfile'] and security_findings['has_subprocess'] and not security_findings['has_os_system'],
+            content=sec_msg,
+            location="src/tools/",
+            rationale="Scanned source files for tempfile sandboxing, subprocess usage, and zero os.system calls.",
+            confidence=1.0
+        ))
+        
+        # Protocol E: Structured Output Enforcement (Maps to dimension: structured_output_enforcement)
+        struct_findings = analyze_structured_output(repo_path)
+        struct_msg = f"Structured Output: used={struct_findings['has_structured_output']}, retry_logic={struct_findings['has_retry_logic']}."
+        _append_evidence(new_evidences, "structured_output_enforcement", Evidence(
+            goal="Verify LLMs use structured output and robust retry logic",
+            found=struct_findings['has_structured_output'] and struct_findings['has_retry_logic'],
+            content=struct_msg,
+            location="src/nodes/judges.py",
+            rationale="Scanned judges.py for .with_structured_output integration and try/except retry loops.",
+            confidence=1.0
         ))
         
     except (RepoCloneError, GitHistoryError) as e:

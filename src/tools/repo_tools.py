@@ -212,3 +212,46 @@ def analyze_graph_structure(path: str) -> Dict[str, bool]:
         "has_typed_state": info.get("has_typed_dict", False) or info.get("has_pydantic_model", False),
         "has_parallel_edges": info.get("has_parallel_edges", False),
     }
+
+def analyze_tool_security(repo_path: str) -> Dict[str, bool]:
+    """
+    Scans src/tools/ for usage of tempfile and subprocess, and lack of os.system.
+    """
+    tools_dir = os.path.join(repo_path, "src", "tools")
+    if not os.path.exists(tools_dir):
+        return {"has_tempfile": False, "has_subprocess": False, "has_os_system": False}
+        
+    findings = {"has_tempfile": False, "has_subprocess": False, "has_os_system": False}
+    
+    for root, _, files in os.walk(tools_dir):
+        for file in files:
+            if file.endswith(".py"):
+                with open(os.path.join(root, file), "r", encoding="utf-8", errors="ignore") as f:
+                    content = f.read()
+                    if "tempfile" in content or "TemporaryDirectory" in content or "mkdtemp" in content:
+                        findings["has_tempfile"] = True
+                    if "subprocess.run" in content or "subprocess.Popen" in content:
+                        findings["has_subprocess"] = True
+                    if "os.system" in content:
+                        findings["has_os_system"] = True
+                        
+    return findings
+
+def analyze_structured_output(repo_path: str) -> Dict[str, bool]:
+    """
+    Scans src/nodes/judges.py for structured output enforcement and retry logic.
+    """
+    judges_file = os.path.join(repo_path, "src", "nodes", "judges.py")
+    if not os.path.exists(judges_file):
+        return {"has_structured_output": False, "has_retry_logic": False}
+        
+    findings = {"has_structured_output": False, "has_retry_logic": False}
+    with open(judges_file, "r", encoding="utf-8", errors="ignore") as f:
+        content = f.read()
+        if ".with_structured_output" in content or ".bind_tools" in content:
+            findings["has_structured_output"] = True
+        # Look for try/except blocks associated with loops indicating retries
+        if "try" in content and "except" in content and ("retry" in content.lower() or "for attempt in" in content):
+            findings["has_retry_logic"] = True
+            
+    return findings
