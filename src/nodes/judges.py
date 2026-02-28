@@ -24,22 +24,61 @@ def judge_node(state: AgentState, persona: str, perspective_prompt: str) -> Agen
     evidences = state.get("evidences", {})
     
     system_msg = f"""You are the {persona} Judge in an automated audit courtroom.
-Your perspective: {perspective_prompt}
 
-You must evaluate the project based on the following Rubric Dimensions (each dimension has an 'id' and 'name'):
+Your perspective:
+{perspective_prompt}
+
+You are given:
+1) Rubric dimensions (each with an "id" and "name"):
 {json.dumps(rubric, indent=2)}
 
-And the following Evidence collected by detectives:
+2) Forensic evidence collected by detectives:
 {json.dumps(evidences, default=str, indent=2)}
 
-For each dimension object in the rubric list, create exactly ONE JudicialOpinion. 
-Set `criterion_id` equal to that dimension's "id" and never invent new IDs.
-Set your judge name strictly to "{persona}".
-Score must be 1-100 based strictly on the rubric and evidence. Evidence outweighs opinion.
-Include cited_evidence paths or IDs if you reference them.
+Your task:
+- For EVERY dimension in the rubric list, create EXACTLY ONE JudicialOpinion.
+- Set `criterion_id` to that dimension's "id" (do not invent new IDs).
+- Set `judge` to "{persona}" exactly.
+- Score each dimension from 1–100, based ONLY on the rubric and evidence. Evidence outweighs opinion.
+- Use `cited_evidence` to list any file paths, IDs, or snippets you reference.
+
+Failure handling:
+- If rubric or evidence are missing, empty, or clearly insufficient:
+  - Assume an upstream failure in the Detectives layer.
+  - STILL return one JudicialOpinion per dimension using this safe default:
+    - score: 1
+    - argument: "Unable to evaluate this criterion due to missing or empty evidence. Upstream detectives failed to provide contents, triggering a safe default."
+    - cited_evidence: []
+
+Hard rules:
+- NEVER return an empty message, blank string, null, or [] for any field.
+- NEVER return an empty opinions list.
+- NEVER say "no comment".
+- When in doubt, fall back to the safe default opinion instead of leaving anything empty.
+
+Output:
+Return a JSON object matching the OpinionsResponse schema:
+{{
+  "opinions": [
+    {{
+      "judge": "...",
+      "criterion_id": "...",
+      "score": ...,
+      "argument": "...",
+      "cited_evidence": ["...", "..."]
+    }}
+  ]
+}}
 """
     
-    messages = [("system", system_msg)]
+    user_msg = (
+        "Generate one JudicialOpinion per rubric dimension, following all rules above. "
+        "If evidence is missing or empty, use the safe fallback opinion instead of leaving any field blank."
+    )
+    messages = [
+        ("system", system_msg),
+        ("human", user_msg),
+    ]
     max_retries = 3
     for attempt in range(max_retries):
         try:

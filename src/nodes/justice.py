@@ -113,19 +113,39 @@ def chief_justice_node(state: AgentState) -> AgentState:
         f"**Overall Score:** {report.overall_score:.2f} / 100",
         f"\n## Executive Summary",
         f"{report.executive_summary}",
+        f"Final Verdict: {'PASS' if report.overall_score >= 80.0 else 'FAIL/REMEDIATION REQUIRED'}",
         f"\n## Criterion Breakdown"
     ]
     
     for cr in report.criteria:
-        md_lines.append(f"### {cr.dimension_name} (ID: {cr.dimension_id}) - Score: {cr.final_score}/100")
-        if cr.dissent_summary:
-            md_lines.append(f"*(Dissent/Rules Applied)*: {cr.dissent_summary}")
-        md_lines.append(f"**Remediation:** {cr.remediation}\n")
+        md_lines.append(f"### {cr.dimension_name} (ID: {cr.dimension_id})")
+        md_lines.append(f"**Final Score: {cr.final_score}/100**\n")
         
-    md_lines.extend([
-        f"\n## Remediation Plan",
-        f"{report.remediation_plan}"
-    ])
+        # Add individual judge opinions
+        md_lines.append("| Judge | Score | Argument | Evidence |")
+        md_lines.append("| :--- | :--- | :--- | :--- |")
+        for op in cr.judge_opinions:
+            evidence_str = ", ".join(op.cited_evidence) if op.cited_evidence else "None"
+            # Clean newlines from argument for table compatibility
+            arg_clean = op.argument.replace("\n", " ")
+            md_lines.append(f"| {op.judge} | {op.score} | {arg_clean} | {evidence_str} |")
+        
+        if cr.dissent_summary:
+            md_lines.append(f"\n> [!IMPORTANT]\n> **Judicial Dissent/Rules**: {cr.dissent_summary}\n")
+        md_lines.append("---")
+        
+    md_lines.append(f"\n## Remediation Plan")
+    remediation_found = False
+    for cr in report.criteria:
+        if cr.final_score < 100:
+            md_lines.append(f"#### [{cr.dimension_name}]")
+            md_lines.append(f"- {cr.remediation}")
+            remediation_found = True
+            
+    if not remediation_found:
+        md_lines.append("No critical remediation required. All dimensions passed at 100%.")
+    else:
+        md_lines.append(f"\n**Overall Guidance:** {report.remediation_plan}")
     
     md_content = "\n".join(md_lines)
     os.makedirs("reports", exist_ok=True)
