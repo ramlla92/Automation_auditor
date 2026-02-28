@@ -16,7 +16,7 @@ class JudicialOpinion(BaseModel):
     criterion_id: str = Field(description="ID of the criterion being evaluated")
     judge: Literal["Prosecutor", "Defense", "TechLead"]
 
-    score: int = Field(ge=1, le=5, description="Score assigned by the judge")
+    score: int = Field(ge=1, le=100, description="Score assigned by the judge")
     argument: str = Field(description="The reasoning behind the score")
     cited_evidence: List[str] = Field(default_factory=list, description="List of evidence locations or IDs cited")
 
@@ -24,7 +24,7 @@ class CriterionResult(BaseModel):
     """Result of judicial synthesis for a single criterion."""
     dimension_id: str
     dimension_name: str
-    final_score: int = Field(ge=1, le=5)
+    final_score: int = Field(ge=1, le=100)
     judge_opinions: List[JudicialOpinion]
     dissent_summary: Optional[str] = Field(default=None, description="Required when score variance > 2")
     remediation: str = Field(description="Specific file-level instructions for improvement")
