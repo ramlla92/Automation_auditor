@@ -35,23 +35,31 @@ And the following Evidence collected by detectives:
 For each dimension object in the rubric list, create exactly ONE JudicialOpinion. 
 Set `criterion_id` equal to that dimension's "id" and never invent new IDs.
 Set your judge name strictly to "{persona}".
-Score must be 1-5 based strictly on the rubric and evidence. Evidence outweighs opinion.
+Score must be 1-100 based strictly on the rubric and evidence. Evidence outweighs opinion.
 Include cited_evidence paths or IDs if you reference them.
 """
     
-    max_retries = 2
+    messages = [("system", system_msg)]
+    max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = llm_with_tools.invoke(system_msg)
+            response = llm_with_tools.invoke(messages)
             if response and response.opinions:
                 # Ensure opinions list exists in state updates
                 return {"opinions": response.opinions}
-            break
+            
+            # If parsed successfully but returned empty list
+            error_msg = "You returned an empty opinions list. You MUST return exactly ONE JudicialOpinion for each dimension ID."
+            print(f"{persona} Node Warning: Empty opinions returned on attempt {attempt+1}")
+            messages.append(("human", error_msg))
+            
         except Exception as e:
             print(f"Error in {persona} node (attempt {attempt+1}): {e}")
             if attempt == max_retries - 1:
                 return {}
-                
+            # Pass validation error back to the LLM to learn and fix
+            messages.append(("human", f"Your previous output failed validation: {str(e)}\nPlease correct the formatting and ensure all required fields are present."))
+            
     return {}
     
 def prosecutor_node(state: AgentState) -> AgentState:
