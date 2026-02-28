@@ -1,9 +1,18 @@
 # automation-auditor/src/tools/vision_tools.py
 from typing import List
 
+from pypdf import PdfReader
+
 def extract_images_from_pdf(path: str) -> List[bytes]:
     """
-    Minimal stub to extract raw image bytes from a PDF.
-    For now, return an empty list or basic extraction using your chosen PDF lib.
+    Extract raw image bytes from a PDF.
     """
-    return []
+    images = []
+    try:
+        reader = PdfReader(path)
+        for page in reader.pages:
+            for image_file_object in page.images:
+                images.append(image_file_object.data)
+    except Exception as e:
+        print(f"VisionTools extraction error: {e}")
+    return images

@@ -1,6 +1,9 @@
 # automation-auditor/src/nodes/detectives.py
 import os
 from ..state import AgentState, Evidence
+import base64
+from langchain_core.messages import HumanMessage
+from langchain_google_genai import ChatGoogleGenerativeAI
 from ..tools.repo_tools import (
     clone_repo, 
     extract_git_history, 
@@ -233,24 +236,48 @@ def vision_inspector_node(state: AgentState) -> AgentState:
         img_count = len(images)
         
         expected = "Detectives (parallel) -> EvidenceAggregator -> Judges (parallel) -> ChiefJustice"
-        # Maps to dimension: swarm_visual
-        _append_evidence(new_evidences, "flow_analysis", Evidence(
-            goal="Analyze architectural diagram structural flow",
-            found=False,
-            content=f"{img_count} images extracted (vision analysis stub). expected_flow: {expected}",
-            location="pdf:images",
-            rationale="VisionInspector is a stub for future multimodal diagram parsing. Currently extracts images but does not evaluate them via LLM.",
-            confidence=0.5
-        ))
-    else:
-        # Maps to dimension: swarm_visual
-        _append_evidence(new_evidences, "flow_analysis", Evidence(
-            goal="Analyze architectural diagram structural flow",
-            found=False,
-            content="VisionInspector stub: Visual flow analysis not yet implemented. No PDF provided.",
-            location="pdf:images",
-            rationale="VisionInspector is a stub for future multimodal diagram parsing.",
-            confidence=0.5
-        ))
+        
+        if img_count > 0:
+            try:
+                llm = ChatGoogleGenerativeAI(model="gemini-2.5-flash", temperature=0.1)
+                
+                content_parts = [{"type": "text", "text": f"Analyze these architecture diagrams according to the needs of the project. The expected flow is: {expected}. Identify if the diagrams strictly depict this complex parallel fan-out/fan-in flow or just a plain linear process. Give a brief but explicit verdict."}]
+                for img_bytes in images:
+                    img_base64 = base64.b64encode(img_bytes).decode('utf-8')
+                    content_parts.append({
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{img_base64}"}
+                    })
+                
+                msg = HumanMessage(content=content_parts)
+                response = llm.invoke([msg])
+                
+                _append_evidence(new_evidences, "flow_analysis", Evidence(
+                    goal="Analyze architectural diagram structural flow",
+                    found=True,
+                    content=str(response.content),
+                    location="pdf:images",
+                    rationale="VisionInspector used Gemini multimodal capabilities to evaluate extracted diagrams against the expected parallel workflow.",
+                    confidence=0.9
+                ))
+            except Exception as e:
+                # Fallback to stub if VLM fails
+                _append_evidence(new_evidences, "flow_analysis", Evidence(
+                    goal="Analyze architectural diagram structural flow",
+                    found=False,
+                    content=f"{img_count} images extracted but VLM analysis failed: {e}",
+                    location="pdf:images",
+                    rationale="Exception during multimodal LLM invocation.",
+                    confidence=0.5
+                ))
+        else:
+            _append_evidence(new_evidences, "flow_analysis", Evidence(
+                goal="Analyze architectural diagram structural flow",
+                found=False,
+                content=f"0 images extracted. expected_flow: {expected}",
+                location="pdf:images",
+                rationale="No images found to analyze in PDF.",
+                confidence=0.5
+            ))
     
     return {"evidences": new_evidences}
