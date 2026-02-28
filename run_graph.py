@@ -20,8 +20,8 @@ def main():
             rubric_payload = json.load(f).get("dimensions", [])
             
     initial_state: AgentState = {
-        "repo_url": "https://github.com/example/repo",
-        "pdf_path": "report.pdf",
+        "repo_url": "https://github.com/bettyabay/Automaton-Auditor.git",
+        "pdf_path": "reports/interim_report.md",
         "rubric_dimensions": rubric_payload,
         "evidences": {},
         "opinions": [],
@@ -37,8 +37,8 @@ def main():
     
     final_report = final_state_snapshot.get("final_report")
     if final_report:
-        print(f"\nFinal Overall Score: {final_report.overall_score:.2f} / 5.0")
-        print(f"MD Report Output: c:\\Users\\THINKPAD\\Desktop\\10_Academy_AI\\Week_2\\automation-auditor\\reports\\audit_report.md")
+        print(f"\nFinal Overall Score: {final_report.overall_score:.2f} / 100")
+        print(f"MD Report Output (Latest): c:\\Users\\THINKPAD\\Desktop\\10_Academy_AI\\Week_2\\automation-auditor\\reports\\audit_report_latest.md")
     else:
         print("Graph finished, but no Final Report was generated.")
 

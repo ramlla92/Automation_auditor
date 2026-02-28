@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 from collections import defaultdict
 from typing import Dict, List
 from ..state import AgentState, AuditReport, CriterionResult, JudicialOpinion
@@ -45,19 +46,19 @@ def chief_justice_node(state: AgentState) -> AgentState:
         
         dissent_summary = None
         variance = max(scores) - min(scores) if scores else 0
-        if variance >= 2:
+        if variance >= 20:
             dissent_summary = f"High variance ({variance}) detected between judges. Prosecutor: {prosecutor.score if prosecutor else 'N/A'}, Defense: {defense.score if defense else 'N/A'}, TechLead: {tech_lead.score if tech_lead else 'N/A'} (Satisfies dissent requirement)."
             reeval_note = " Chief Justice re-evaluated the specific evidence cited by each judge before setting the final score."
             dissent_summary = (dissent_summary or "") + reeval_note
             
         # Deterministic Rules
-        # 1. Security Override (Prosecutor <= 2 caps final score at 3)
-        if prosecutor and prosecutor.score <= 2:
-            final_score = min(final_score, 3)
+        # 1. Security Override (Prosecutor <= 40 caps final score at 60)
+        if prosecutor and prosecutor.score <= 40:
+            final_score = min(final_score, 60)
             if dissent_summary:
-                dissent_summary += " | Rule of Security applied: Final score capped at 3 due to Prosecutor veto."
+                dissent_summary += " | Rule of Security applied: Final score capped at 60 due to Prosecutor veto."
             else:
-                dissent_summary = "Rule of Security applied: Final score capped at 3 due to Prosecutor veto."
+                dissent_summary = "Rule of Security applied: Final score capped at 60 due to Prosecutor veto."
                 
         # 2. Functionality Weight (Bias toward TechLead for Architecture criteria)
         is_architecture = "architecture" in crit_id.lower() or "graph" in crit_id.lower() or "state" in crit_id.lower()
@@ -70,7 +71,7 @@ def chief_justice_node(state: AgentState) -> AgentState:
                 dissent_summary = f"Rule of Functionality applied: Score biased towards Tech Lead ({tech_lead.score})."
                 
         # Ensure bounds
-        final_score = max(1, min(5, final_score))
+        final_score = max(1, min(100, final_score))
         
         remediation_text = "Review the specific gaps flagged by the Prosecutor and TechLead to align architecture with the required schema."
         if "git" in crit_id.lower():
@@ -95,28 +96,28 @@ def chief_justice_node(state: AgentState) -> AgentState:
         all_scores = [cr.final_score for cr in criteria_results]
         overall_avg = sum(all_scores) / len(all_scores)
         
-        exec_summary = f"Automated Audit Complete. Evaluated {len(criteria_results)} criteria. Overall average score: {overall_avg:.2f}/5.0."
+        exec_summary = f"Automated Audit Complete. Evaluated {len(criteria_results)} criteria. Overall average score: {overall_avg:.2f}/100."
         
     report = AuditReport(
         repo_url=state.get("repo_url", "unknown"),
         executive_summary=exec_summary,
         overall_score=overall_avg,
         criteria=criteria_results,
-        remediation_plan="Review failed or disputed criteria and implement fixes." if overall_avg < 4.0 else "No major remediation required."
+        remediation_plan="Review failed or disputed criteria and implement fixes." if overall_avg < 80.0 else "No major remediation required."
     )
     
     # Generate Markdown Report
     md_lines = [
         f"# Automaton Auditor - Final Report",
         f"**Repository URL:** {report.repo_url}",
-        f"**Overall Score:** {report.overall_score:.2f} / 5.0",
+        f"**Overall Score:** {report.overall_score:.2f} / 100",
         f"\n## Executive Summary",
         f"{report.executive_summary}",
         f"\n## Criterion Breakdown"
     ]
     
     for cr in report.criteria:
-        md_lines.append(f"### {cr.dimension_name} (ID: {cr.dimension_id}) - Score: {cr.final_score}/5")
+        md_lines.append(f"### {cr.dimension_name} (ID: {cr.dimension_id}) - Score: {cr.final_score}/100")
         if cr.dissent_summary:
             md_lines.append(f"*(Dissent/Rules Applied)*: {cr.dissent_summary}")
         md_lines.append(f"**Remediation:** {cr.remediation}\n")
@@ -128,7 +129,23 @@ def chief_justice_node(state: AgentState) -> AgentState:
     
     md_content = "\n".join(md_lines)
     os.makedirs("reports", exist_ok=True)
-    with open("reports/audit_report.md", "w", encoding="utf-8") as f:
+    
+    # Parse repo url for safe filename
+    url_parts = report.repo_url.rstrip("/").split("/")
+    repo_name = url_parts[-1].replace(".git", "") if len(url_parts) > 0 else "unknown"
+    user_name = url_parts[-2] if len(url_parts) > 1 else "unknown"
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    unique_filename = f"audit_{user_name}_{repo_name}_{timestamp}.md"
+    unique_filepath = os.path.join("reports", unique_filename)
+    latest_filepath = os.path.join("reports", "audit_report_latest.md")
+    
+    with open(unique_filepath, "w", encoding="utf-8") as f:
         f.write(md_content)
+        
+    with open(latest_filepath, "w", encoding="utf-8") as f:
+        f.write(md_content)
+        
+    print(f"Generated Audit Report: {unique_filepath}")
         
     return {"final_report": report}
